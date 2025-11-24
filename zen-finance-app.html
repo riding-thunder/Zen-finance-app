@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+   <title>ZenBudget Cloud</title>
+   <script src="https://cdn.tailwindcss.com"></script>
+   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+   <style>
+       body {
+           font-family: 'Inter', sans-serif;
+           background-color: #0f172a;
+           color: #f8fafc;
+           -webkit-tap-highlight-color: transparent;
+           overscroll-behavior-y: none;
+       }
+       .no-scrollbar::-webkit-scrollbar { display: none; }
+       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+       
+       /* View Transitions */
+       .view-transition { transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
+       .slide-in-right { transform: translateX(100%); }
+       .slide-in-active { transform: translateX(0%); }
+       
+       /* Modal Transitions */
+       #addModal, #exportModal { transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
+       .slide-up { transform: translateY(0%); }
+       .slide-down { transform: translateY(100%); }
+       
+       .glass {
+           background: rgba(30, 41, 59, 0.7);
+           backdrop-filter: blur(12px);
+           -webkit-backdrop-filter: blur(12px);
+           border: 1px solid rgba(255, 255, 255, 0.05);
+       }
+       
+       .loader {
+           border: 3px solid #1e293b;
+           border-radius: 50%;
+           border-top: 3px solid #3b82f6;
+           width: 24px;
+           height: 24px;
+           animation: spin 1s linear infinite;
+       }
+       @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+       input[type="date"]::-webkit-calendar-picker-indicator {
+           filter: invert(1);
+           cursor: pointer;
+       }
+       /* Custom style to adjust for the ₹ symbol */
+       #amount {
+           padding-left: 1.5rem; /* Reduced padding from 2rem to 1.5rem to look better with '₹' */
+       }
+   </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col relative">
+
+   <!-- ================= MAIN DASHBOARD VIEW ================= -->
+   <div id="mainView" class="flex-1 flex flex-col h-full w-full absolute inset-0 transition-transform duration-300">
+       
+       <!-- Header -->
+       <header class="p-6 pt-8 pb-2 flex-shrink-0 z-10">
+           <div class="flex justify-between items-center mb-6">
+               <div class="flex items-center gap-2">
+                   <div class="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                       <i class="fa-solid fa-cloud text-white text-sm"></i>
+                   </div>
+                   <h1 class="text-xl font-bold tracking-wide">ZenBudget <span class="text-xs font-normal text-indigo-400 ml-1">Cloud</span></h1>
+               </div>
+               <div class="flex items-center gap-2">
+                   <button onclick="window.app.openExportModal('main')" class="w-8 h-8 rounded-full bg-slate-800/50 text-slate-400 flex items-center justify-center hover:bg-slate-700 hover:text-white transition-colors">
+                       <i class="fa-solid fa-download text-xs"></i>
+                   </button>
+                   <div id="statusIndicator" class="flex items-center gap-2 bg-slate-800/50 px-3 py-1 rounded-full">
+                       <div class="loader"></div>
+                       <span class="text-[10px] text-slate-400 uppercase tracking-widest">Syncing</span>
+                   </div>
+               </div>
+           </div>
+
+           <!-- Balance Card -->
+           <div class="bg-gradient-to-br from-indigo-600 to-purple-700 p-6 rounded-2xl shadow-2xl shadow-indigo-900/20 relative overflow-hidden">
+               <div class="absolute -top-10 -right-10 w-32 h-32 bg-white opacity-5 rounded-full blur-2xl"></div>
+               <div class="absolute bottom-0 left-0 w-24 h-24 bg-black opacity-10 rounded-full blur-xl"></div>
+
+               <p class="text-indigo-100 text-sm font-medium mb-1">Total Balance</p>
+               <h2 class="text-4xl font-bold text-white mb-6 tracking-tight" id="totalBalance">--</h2>
+
+               <div class="flex gap-4">
+                   <div class="bg-black/20 rounded-xl p-3 flex-1 backdrop-blur-sm">
+                       <div class="flex items-center gap-2 mb-1">
+                           <div class="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                               <i class="fa-solid fa-arrow-down text-[10px] text-emerald-400"></i>
+                           </div>
+                           <span class="text-xs text-indigo-100">Income</span>
+                       </div>
+                       <p class="text-lg font-semibold text-emerald-300" id="totalIncome">--</p>
+                   </div>
+                   <div class="bg-black/20 rounded-xl p-3 flex-1 backdrop-blur-sm">
+                       <div class="flex items-center gap-2 mb-1">
+                           <div class="w-5 h-5 rounded-full bg-rose-500/20 flex items-center justify-center">
+                               <i class="fa-solid fa-arrow-up text-[10px] text-rose-400"></i>
+                           </div>
+                           <span class="text-xs text-indigo-100">Expense</span>
+                       </div>
+                       <p class="text-lg font-semibold text-rose-300" id="totalExpense">--</p>
+                   </div>
+               </div>
+           </div>
+       </header>
+
+       <!-- List Content -->
+       <main class="flex-1 overflow-y-auto no-scrollbar px-6 pb-28 relative">
+           <div class="sticky top-0 bg-[#0f172a] z-10 pb-2 border-b border-slate-800/50 mb-4 transition-all">
+               <div class="flex justify-between items-center py-3">
+                   <div class="flex items-center gap-3">
+                       <h3 class="text-slate-400 font-semibold text-sm uppercase tracking-wider">History</h3>
+                       <button onclick="window.app.toggleSearch()" id="searchToggleBtn" class="w-8 h-8 rounded-full bg-slate-800/50 text-slate-400 flex items-center justify-center hover:bg-slate-700 hover:text-white transition-colors">
+                           <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                       </button>
+                   </div>
+                   
+                   <div class="bg-slate-800/80 p-1 rounded-lg flex text-xs font-medium">
+                       <button onclick="window.app.setSort('date')" id="sortDateBtn" class="px-3 py-1 rounded-md transition-colors text-white bg-slate-600 shadow-sm">Date</button>
+                       <button onclick="window.app.setSort('category')" id="sortCatBtn" class="px-3 py-1 rounded-md transition-colors text-slate-400 hover:text-white">Category</button>
+                   </div>
+               </div>
+
+               <div id="searchBar" class="hidden mb-1 animate-fade-in">
+                   <div class="relative">
+                       <i class="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+                       <input type="text" id="searchInput" oninput="window.app.onSearch(this.value)" placeholder="Search description or category..."
+                           class="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 pl-10 pr-10 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors placeholder-slate-600">
+                       <button onclick="window.app.clearSearch()" id="searchClearBtn" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
+                           <i class="fa-solid fa-xmark"></i>
+                       </button>
+                   </div>
+               </div>
+           </div>
+
+           <div id="emptyState" class="hidden flex-col items-center justify-center py-12 text-slate-600">
+               <i class="fa-solid fa-cloud-arrow-up text-4xl mb-3 opacity-30"></i>
+               <p class="text-sm">No transactions found.</p>
+           </div>
+
+           <ul id="transactionList" class="space-y-3 pb-4"></ul>
+       </main>
+
+       <!-- FAB -->
+       <div class="absolute bottom-6 right-6 z-20">
+           <button onclick="window.app.openModal('add')" class="w-14 h-14 bg-indigo-500 hover:bg-indigo-400 text-white rounded-full shadow-lg shadow-indigo-500/40 flex items-center justify-center text-xl transition-transform active:scale-90">
+               <i class="fa-solid fa-plus"></i>
+           </button>
+       </div>
+   </div>
+
+   <!-- ================= CATEGORY DETAIL PAGE ================= -->
+   <div id="detailView" class="fixed inset-0 bg-[#0f172a] z-30 flex flex-col slide-in-right view-transition hidden">
+       <header class="bg-[#0f172a] border-b border-slate-800 z-10 pb-2">
+           <div class="flex items-center justify-between p-6 pt-8 pb-2">
+               <div class="flex items-center gap-4">
+                   <button onclick="window.app.closeDetailView()" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 hover:text-white active:bg-slate-700">
+                       <i class="fa-solid fa-arrow-left"></i>
+                   </button>
+                   <div>
+                       <p class="text-xs text-slate-500 uppercase tracking-wider font-bold">Category</p>
+                       <h2 class="text-2xl font-bold text-white" id="detailTitle">Category Name</h2>
+                   </div>
+               </div>
+               <div class="flex items-center gap-2">
+                   <button onclick="window.app.openExportModal('detail')" class="w-10 h-10 rounded-full bg-slate-800/50 text-slate-400 flex items-center justify-center hover:bg-slate-700 hover:text-white transition-colors">
+                       <i class="fa-solid fa-download text-sm"></i>
+                   </button>
+                   <button onclick="window.app.toggleDetailSearch()" class="w-10 h-10 rounded-full bg-slate-800/50 text-slate-400 flex items-center justify-center hover:bg-slate-700 hover:text-white transition-colors">
+                       <i class="fa-solid fa-magnifying-glass"></i>
+                   </button>
+               </div>
+           </div>
+
+           <!-- Detail Search Bar -->
+           <div id="detailSearchBar" class="hidden px-6 pb-4 animate-fade-in">
+               <div class="relative">
+                   <i class="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+                   <input type="text" id="detailSearchInput" oninput="window.app.onDetailSearch(this.value)" placeholder="Search in this category..."
+                       class="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 pl-10 pr-10 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors placeholder-slate-600">
+                   <button onclick="window.app.clearDetailSearch()" id="detailSearchClearBtn" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
+                       <i class="fa-solid fa-xmark"></i>
+                   </button>
+               </div>
+           </div>
+       </header>
+
+       <div class="px-6 py-6 bg-slate-900/50">
+           <div class="glass p-4 rounded-xl flex justify-between items-center">
+               <span class="text-slate-400 text-sm">Net Balance</span>
+               <span class="text-2xl font-bold" id="detailBalance">₹0.00</span>
+           </div>
+       </div>
+
+       <main class="flex-1 overflow-y-auto no-scrollbar px-6 pb-10">
+           <h3 class="text-slate-500 text-xs font-bold uppercase tracking-wider mb-4 mt-4">Transactions (Newest First)</h3>
+           <ul id="detailList" class="space-y-3"></ul>
+       </main>
+   </div>
+
+   <!-- ================= ADD/EDIT TRANSACTION MODAL ================= -->
+   <div id="modalOverlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden opacity-0 transition-opacity duration-300" onclick="window.app.closeModal('add')"></div>
+   
+   <div id="addModal" class="fixed bottom-0 left-0 right-0 bg-[#1e293b] rounded-t-3xl z-50 p-6 slide-down shadow-2xl border-t border-slate-700 h-auto max-h-[90vh] flex flex-col overflow-y-auto">
+       <div class="w-full flex justify-center mb-6" onclick="window.app.closeModal('add')">
+           <div class="w-12 h-1.5 bg-slate-600 rounded-full"></div>
+       </div>
+
+       <h2 class="text-xl font-bold text-white mb-6" id="modalTitle">New Transaction</h2>
+
+       <form id="transactionForm" onsubmit="window.app.handleTransactionSave(event)">
+           <div class="grid grid-cols-2 gap-3 p-1 bg-slate-800 rounded-xl mb-6">
+               <label class="cursor-pointer">
+                   <input type="radio" name="type" value="expense" class="peer sr-only" checked onchange="window.app.toggleTypeStyle()">
+                   <div class="text-center py-3 rounded-lg text-sm font-medium text-slate-400 peer-checked:bg-slate-700 peer-checked:text-rose-400 transition-all">Expense</div>
+               </label>
+               <label class="cursor-pointer">
+                   <input type="radio" name="type" value="income" class="peer sr-only" onchange="window.app.toggleTypeStyle()">
+                   <div class="text-center py-3 rounded-lg text-sm font-medium text-slate-400 peer-checked:bg-slate-700 peer-checked:text-emerald-400 transition-all">Income</div>
+               </label>
+           </div>
+           <div class="mb-6">
+               <label class="block text-slate-400 text-xs mb-2 uppercase font-bold tracking-wide">Amount</label>
+               <div class="relative">
+                   <!-- CHANGED: Currency symbol is now Indian Rupee (₹) -->
+                   <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl">₹</span>
+                   <input type="number" id="amount" step="0.01" placeholder="0.00" required inputmode="decimal"
+                       class="w-full bg-slate-900/50 border border-slate-700 text-white text-2xl font-semibold pl-8 pr-4 py-4 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors placeholder-slate-600">
+               </div>
+           </div>
+           <div class="mb-6">
+               <label class="block text-slate-400 text-xs mb-2 uppercase font-bold tracking-wide">Date</label>
+               <div class="relative">
+                   <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"><i class="fa-regular fa-calendar"></i></span>
+                   <input type="date" id="dateInput" required
+                       class="w-full bg-slate-900/50 border border-slate-700 text-white text-base pl-10 pr-4 py-4 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors placeholder-slate-600 appearance-none">
+               </div>
+           </div>
+           <div class="mb-6">
+               <label class="block text-slate-400 text-xs mb-2 uppercase font-bold tracking-wide">Category</label>
+               <div class="relative">
+                   <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"><i class="fa-solid fa-tag"></i></span>
+                   <input type="text" id="category" list="categoryList" placeholder="Select or type new..." required
+                       class="w-full bg-slate-900/50 border border-slate-700 text-white text-base pl-10 pr-4 py-4 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors placeholder-slate-600">
+                   <datalist id="categoryList"></datalist>
+               </div>
+           </div>
+           <div class="mb-6">
+               <label class="block text-slate-400 text-xs mb-2 uppercase font-bold tracking-wide">Receipt/File <span class="text-slate-600 font-normal lowercase">(optional)</span></label>
+               <div id="filePreviewContainer" class="mb-3 hidden">
+                   <!-- Receipt/File Preview goes here -->
+               </div>
+               <div class="relative flex items-center gap-2">
+                   <label for="receiptFile" class="flex-1 cursor-pointer bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 px-4 rounded-xl transition-colors text-center text-sm border border-slate-700">
+                       <i class="fa-solid fa-cloud-arrow-up mr-2"></i>
+                       <span id="uploadLabel">Upload or Capture Receipt</span>
+                   </label>
+                   <button type="button" id="removeFileBtn" onclick="window.app.removeReceipt()" class="hidden w-10 h-10 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center text-xs flex-shrink-0">
+                       <i class="fa-solid fa-xmark"></i>
+                   </button>
+                   <input type="file" id="receiptFile" accept="image/*, application/pdf" class="hidden" onchange="window.app.handleFileSelect(event)">
+               </div>
+               <p id="fileStatus" class="text-xs mt-2 text-slate-500"></p>
+           </div>
+           <div class="mb-8">
+               <label class="block text-slate-400 text-xs mb-2 uppercase font-bold tracking-wide">Description <span class="text-slate-600 font-normal lowercase">(optional)</span></label>
+               <input type="text" id="text" placeholder="e.g. Lunch at Joe's"
+                   class="w-full bg-slate-900/50 border border-slate-700 text-white text-base px-4 py-4 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors placeholder-slate-600">
+           </div>
+           <button type="submit" id="submitBtn" class="w-full bg-rose-500 hover:bg-rose-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-rose-500/20 active:scale-[0.98] transition-all text-lg">
+               Add Expense
+           </button>
+       </form>
+   </div>
+
+   <!-- ================= EXPORT MODAL ================= -->
+   <div id="exportModalOverlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden opacity-0 transition-opacity duration-300" onclick="window.app.closeModal('export')"></div>
+   
+   <div id="exportModal" class="fixed bottom-0 left-0 right-0 bg-[#1e293b] rounded-t-3xl z-50 p-6 slide-down shadow-2xl border-t border-slate-700 h-auto max-h-[90vh] flex flex-col overflow-y-auto">
+       <div class="w-full flex justify-center mb-6" onclick="window.app.closeModal('export')">
+           <div class="w-12 h-1.5 bg-slate-600 rounded-full"></div>
+       </div>
+
+       <h2 class="text-xl font-bold text-white mb-6">Export Transactions</h2>
+       <p class="text-sm text-slate-400 mb-4" id="exportContext">Exporting all transactions.</p>
+
+       <form id="exportForm" onsubmit="window.app.handleExport(event)">
+           <div class="grid grid-cols-2 gap-4 mb-6">
+               <div>
+                   <label for="startDate" class="block text-slate-400 text-xs mb-2 uppercase font-bold tracking-wide">Start Date</label>
+                   <input type="date" id="startDate" required
+                       class="w-full bg-slate-900/50 border border-slate-700 text-white text-base px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors appearance-none">
+               </div>
+               <div>
+                   <label for="endDate" class="block text-slate-400 text-xs mb-2 uppercase font-bold tracking-wide">End Date</label>
+                   <input type="date" id="endDate" required
+                       class="w-full bg-slate-900/50 border border-slate-700 text-white text-base px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors appearance-none">
+               </div>
+           </div>
+
+           <button type="submit" id="exportBtn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-500/20 active:scale-[0.98] transition-all text-lg">
+               Download CSV
+           </button>
+       </form>
+   </div>
+
+   <!-- Logic -->
+   <script type="module">
+       import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+       import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+       import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, updateDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+       import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js';
+
+       const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
+       const appId = window.__app_id || 'default-app';
+       
+       const app = initializeApp(firebaseConfig);
+       const auth = getAuth(app);
+       const db = getFirestore(app);
+       const storage = getStorage(app); // Initialize Firebase Storage
+
+       let currentUser = null;
+       let unsubscribeSnapshot = null;
+       let transactions = [];
+       let currentSort = 'date';
+       let searchQuery = '';
+       let detailSearchQuery = '';
+       let exportContext = 'main'; // 'main' or 'detail'
+       
+       // State for Edit/Upload
+       let currentTransactionId = null;
+       let currentReceiptFile = null; // File object for new upload
+       let currentReceiptUrl = null; // URL of the existing or newly uploaded receipt
+       let currentStoragePath = null; // NEW: Storage path for secure deletion
+       
+       const DEFAULT_CATEGORIES = ['Food', 'Transport', 'Housing', 'Utilities', 'Health', 'Entertainment', 'Shopping', 'Salary', 'Investment'];
+
+       const els = {
+           mainView: document.getElementById('mainView'),
+           detailView: document.getElementById('detailView'),
+           detailTitle: document.getElementById('detailTitle'),
+           detailList: document.getElementById('detailList'),
+           detailBalance: document.getElementById('detailBalance'),
+           balance: document.getElementById('totalBalance'),
+           income: document.getElementById('totalIncome'),
+           expense: document.getElementById('totalExpense'),
+           list: document.getElementById('transactionList'),
+           emptyState: document.getElementById('emptyState'),
+           status: document.getElementById('statusIndicator'),
+           
+           // Add/Edit Modal
+           modal: document.getElementById('addModal'),
+           overlay: document.getElementById('modalOverlay'),
+           modalTitle: document.getElementById('modalTitle'),
+           amount: document.getElementById('amount'),
+           text: document.getElementById('text'),
+           date: document.getElementById('dateInput'),
+           category: document.getElementById('category'),
+           categoryList: document.getElementById('categoryList'),
+           submitBtn: document.getElementById('submitBtn'),
+
+           // File Upload UI
+           receiptFile: document.getElementById('receiptFile'),
+           uploadLabel: document.getElementById('uploadLabel'),
+           fileStatus: document.getElementById('fileStatus'),
+           filePreviewContainer: document.getElementById('filePreviewContainer'),
+           removeFileBtn: document.getElementById('removeFileBtn'),
+           
+           // Search UI
+           sortDateBtn: document.getElementById('sortDateBtn'),
+           sortCatBtn: document.getElementById('sortCatBtn'),
+           searchBar: document.getElementById('searchBar'),
+           searchInput: document.getElementById('searchInput'),
+           searchClearBtn: document.getElementById('searchClearBtn'),
+           detailSearchBar: document.getElementById('detailSearchBar'),
+           detailSearchInput: document.getElementById('detailSearchInput'),
+           detailSearchClearBtn: document.getElementById('detailSearchClearBtn'),
+
+           // Export Modal
+           exportModal: document.getElementById('exportModal'),
+           exportOverlay: document.getElementById('exportModalOverlay'),
+           startDate: document.getElementById('startDate'),
+           endDate: document.getElementById('endDate'),
+           exportBtn: document.getElementById('exportBtn'),
+           exportContextText: document.getElementById('exportContext')
+       };
+
+       async function initAuth() {
+           try {
+               if (window.__initial_auth_token) {
+                   await signInWithCustomToken(auth, window.__initial_auth_token);
+               } else {
+                   await signInAnonymously(auth);
+               }
+           } catch (err) {
+               console.error("Auth failed", err);
+               setStatus("Error", "text-red-500");
+           }
+       }
+
+       onAuthStateChanged(auth, (user) => {
+           if (user) {
+               currentUser = user;
+               setStatus("Live", "text-emerald-400");
+               setupRealtimeListener(user.uid);
+           } else {
+               setStatus("Offline", "text-slate-500");
+               transactions = [];
+               updateUI();
+           }
+       });
+
+       function setupRealtimeListener(userId) {
+           if (unsubscribeSnapshot) unsubscribeSnapshot();
+           const colRef = collection(db, 'artifacts', appId, 'users', userId, 'transactions');
+           
+           unsubscribeSnapshot = onSnapshot(colRef, (snapshot) => {
+               // Ensure we handle old documents that might not have storagePath
+               transactions = snapshot.docs.map(doc => ({
+                   id: doc.id,
+                   storagePath: doc.data().storagePath || null, // Default to null if missing
+                   ...doc.data()
+               }));
+               updateUI();
+               updateCategoryDropdown();
+               
+               if(window.currentDetailCategory) {
+                   window.app.renderDetailList();
+               }
+           }, (error) => {
+               console.error("Snapshot error:", error);
+               setStatus("Sync Error", "text-red-400");
+           });
+       }
+
+       function updateCategoryDropdown() {
+           const usedCats = transactions.map(t => t.category).filter(c => c);
+           const uniqueCats = [...new Set([...DEFAULT_CATEGORIES, ...usedCats])].sort();
+           els.categoryList.innerHTML = uniqueCats.map(cat => `<option value="${cat}">`).join('');
+       }
+
+       function filterTransactions() {
+           if (!searchQuery) return transactions;
+           const lowerQ = searchQuery.toLowerCase();
+           return transactions.filter(t =>
+               (t.text && t.text.toLowerCase().includes(lowerQ)) ||
+               (t.category && t.category.toLowerCase().includes(lowerQ))
+           );
+       }
+
+       window.app = {
+           // --- CORE TRANSACTION SAVE LOGIC (Add & Edit) ---
+           handleTransactionSave: async (e) => {
+               e.preventDefault();
+               if (!currentUser) return;
+
+               const textVal = els.text.value || '';
+               const catVal = els.category.value;
+               const amountVal = els.amount.value;
+               const dateVal = els.date.value;
+               const type = document.querySelector('input[name="type"]:checked').value;
+               if (!amountVal || !catVal || !dateVal) return;
+               
+               const amount = type === 'expense' ? -Math.abs(amountVal) : Math.abs(amountVal);
+               const timestamp = new Date(dateVal + 'T12:00:00').getTime();
+               
+               let receiptUrl = currentReceiptUrl;
+               let storagePath = currentStoragePath; // Start with existing path or null
+               let uploadPromise = Promise.resolve();
+               
+               els.submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Saving...';
+               
+               // 1. Handle File Upload if a new file is selected
+               if (currentReceiptFile) {
+                   els.fileStatus.innerText = "Uploading receipt...";
+                   
+                   // Generate a unique path using the transaction ID (if editing) or a timestamp (if new)
+                   const uniqueId = currentTransactionId || Date.now();
+                   const filePath = `artifacts/${appId}/users/${currentUser.uid}/receipts/${uniqueId}_${currentReceiptFile.name}`;
+                   const storageRef = ref(storage, filePath);
+                   
+                   // Set the storage path for saving to Firestore
+                   storagePath = filePath;
+                   
+                   uploadPromise = uploadBytes(storageRef, currentReceiptFile).then(snapshot => {
+                       console.log("File uploaded successfully to:", storagePath);
+                       return getDownloadURL(snapshot.ref);
+                   }).then(url => {
+                       receiptUrl = url;
+                       els.fileStatus.innerText = "Upload complete.";
+                   }).catch(err => {
+                       console.error("Upload failed", err);
+                       els.fileStatus.innerText = "Upload failed. Saving without receipt.";
+                       receiptUrl = null;
+                       storagePath = null; // Clear path if upload fails
+                   });
+               }
+               
+               await uploadPromise; // Wait for upload to complete
+
+               // If receipt was explicitly removed, clear storage path
+               if (!receiptUrl && !currentReceiptFile && currentTransactionId) {
+                   // This block handles the case where an existing receipt was removed via removeReceipt()
+                   storagePath = null;
+               }
+
+               const transactionData = {
+                   text: textVal,
+                   category: catVal,
+                   amount: amount,
+                   timestamp: timestamp,
+                   type: type,
+                   receiptUrl: receiptUrl, // Public URL for display
+                   storagePath: storagePath // Secure path for deletion
+               };
+
+               try {
+                   if (currentTransactionId) {
+                       // EDIT existing transaction
+                       const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'transactions', currentTransactionId);
+                       await updateDoc(docRef, transactionData);
+                   } else {
+                       // ADD new transaction
+                       const colRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'transactions');
+                       await addDoc(colRef, transactionData);
+                   }
+                   window.app.closeModal('add');
+               } catch (err) {
+                   console.error("Firestore operation failed", err);
+               } finally {
+                   window.app.toggleTypeStyle();
+               }
+           },
+
+           removeTransaction: async (id) => {
+               // In a real app, this should be a custom confirmation modal.
+               // Using alert replacement pattern (in the future, implement a modal)
+               if (!currentUser) return;
+
+               const confirmed = new Promise((resolve) => {
+                   // Simple custom confirmation UI instead of alert/confirm
+                   const modal = document.createElement('div');
+                   modal.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm';
+                   modal.innerHTML = `
+                       <div class="bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm mx-4">
+                           <h3 class="text-lg font-bold text-white mb-2">Confirm Deletion</h3>
+                           <p class="text-sm text-slate-400 mb-6">Are you sure you want to delete this transaction?</p>
+                           <div class="flex justify-end gap-3">
+                               <button id="cancelBtn" class="px-4 py-2 text-sm rounded-lg text-slate-400 hover:bg-slate-700 transition-colors">Cancel</button>
+                               <button id="confirmBtn" class="px-4 py-2 text-sm rounded-lg bg-rose-600 hover:bg-rose-700 text-white transition-colors">Delete</button>
+                           </div>
+                       </div>
+                   `;
+                   document.body.appendChild(modal);
+
+                   document.getElementById('cancelBtn').onclick = () => { document.body.removeChild(modal); resolve(false); };
+                   document.getElementById('confirmBtn').onclick = () => { document.body.removeChild(modal); resolve(true); };
+               });
+
+               if (!(await confirmed)) return;
+
+               const tx = transactions.find(t => t.id === id);
+               
+               // IMPORTANT: Use storagePath for deletion
+               if (tx && tx.storagePath) {
+                   try {
+                       const receiptRef = ref(storage, tx.storagePath);
+                       await deleteObject(receiptRef);
+                       console.log("Associated receipt deleted from storage:", tx.storagePath);
+                   } catch (err) {
+                       // Ignore 404/file not found errors gracefully
+                       console.warn("Could not delete old receipt from storage (may not exist, permission issue, or file was already deleted).", err);
+                   }
+               }
+
+               const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'transactions', id);
+               await deleteDoc(docRef).catch(err => console.error("Error deleting document:", err));
+           },
+           
+           // --- MODAL MANAGEMENT ---
+           openModal: (type, transaction = null) => {
+               currentTransactionId = null;
+               currentReceiptFile = null;
+               currentReceiptUrl = null;
+               currentStoragePath = null; // NEW: Reset storage path
+               els.receiptFile.value = ''; // Clear file input
+               els.fileStatus.innerText = '';
+               
+               if (type === 'add') {
+                   // Reset to ADD state
+                   els.modalTitle.innerText = transaction ? 'Edit Transaction' : 'New Transaction';
+                   
+                   // Populate fields if editing
+                   if (transaction) {
+                       currentTransactionId = transaction.id;
+                       currentReceiptUrl = transaction.receiptUrl;
+                       currentStoragePath = transaction.storagePath; // NEW: Load existing path
+                       
+                       els.amount.value = Math.abs(transaction.amount);
+                       els.text.value = transaction.text || '';
+                       els.category.value = transaction.category || '';
+                       
+                       const date = new Date(transaction.timestamp);
+                       const localIso = new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                       els.date.value = localIso;
+
+                       document.querySelector(`input[name="type"][value="${transaction.type}"]`).checked = true;
+                   } else {
+                       // Reset for new transaction
+                       const now = new Date();
+                       const localIso = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                       els.date.value = localIso;
+                       els.amount.value = '';
+                       els.text.value = '';
+                       els.category.value = '';
+                       document.querySelector(`input[name="type"][value="expense"]`).checked = true;
+                   }
+
+                   // Handle receipt display
+                   window.app.updateFilePreview(currentReceiptUrl);
+                   
+                   window.app.toggleTypeStyle(); // Update button color/text
+                   const modal = els.modal;
+                   const overlay = els.overlay;
+                   overlay.classList.remove('hidden');
+                   setTimeout(() => {
+                       overlay.classList.remove('opacity-0');
+                       modal.classList.remove('slide-down');
+                       modal.classList.add('slide-up');
+                       els.amount.focus();
+                   }, 10);
+               } else if (type === 'export') {
+                   // Export modal open logic (unchanged)
+                   const modal = els.exportModal;
+                   const overlay = els.exportOverlay;
+                   overlay.classList.remove('hidden');
+                   setTimeout(() => {
+                       overlay.classList.remove('opacity-0');
+                       modal.classList.remove('slide-down');
+                       modal.classList.add('slide-up');
+                   }, 10);
+               }
+           },
+
+           closeModal: (type) => {
+               const modal = type === 'add' ? els.modal : els.exportModal;
+               const overlay = type === 'add' ? els.overlay : els.exportOverlay;
+
+               modal.classList.remove('slide-up');
+               modal.classList.add('slide-down');
+               overlay.classList.add('opacity-0');
+               setTimeout(() => { overlay.classList.add('hidden'); }, 300);
+           },
+           
+           // --- FILE UPLOAD LOGIC ---
+           handleFileSelect: (e) => {
+               const file = e.target.files[0];
+               if (file) {
+                   currentReceiptFile = file;
+                   // Clear existing URL/Path if a new file is chosen
+                   currentReceiptUrl = null;
+                   currentStoragePath = null;
+                   
+                   els.fileStatus.innerText = `Ready to upload: ${file.name}`;
+                   els.uploadLabel.innerText = 'Change Receipt/File';
+                   
+                   // Generate local URL for preview
+                   const localUrl = URL.createObjectURL(file);
+                   window.app.updateFilePreview(localUrl, file.type);
+               }
+           },
+           
+           updateFilePreview: (url, mimeType = null) => {
+               els.filePreviewContainer.innerHTML = '';
+               if (url) {
+                   const isImage = mimeType ? mimeType.startsWith('image/') : (url.match(/\.(jpeg|jpg|png|gif)$/i) !== null);
+                   const isPDF = mimeType ? mimeType === 'application/pdf' : url.endsWith('.pdf');
+                   
+                   els.filePreviewContainer.classList.remove('hidden');
+                   
+                   if (isImage) {
+                       els.filePreviewContainer.innerHTML = `<img src="${url}" class="max-w-full h-auto max-h-40 object-contain rounded-lg border border-slate-700/50" alt="Receipt Preview">`;
+                   } else if (isPDF) {
+                       els.filePreviewContainer.innerHTML = `
+                           <div class="flex items-center gap-3 p-3 bg-slate-800 rounded-lg">
+                               <i class="fa-solid fa-file-pdf text-red-500 text-2xl"></i>
+                               <a href="${url}" target="_blank" class="text-sm text-indigo-400 hover:text-indigo-300 truncate">View PDF Receipt</a>
+                           </div>`;
+                   } else {
+                       // General file link (e.g. if we don't know the type from the URL)
+                        els.filePreviewContainer.innerHTML = `
+                           <div class="flex items-center gap-3 p-3 bg-slate-800 rounded-lg">
+                               <i class="fa-solid fa-file text-slate-500 text-2xl"></i>
+                               <a href="${url}" target="_blank" class="text-sm text-indigo-400 hover:text-indigo-300 truncate">View Attachment</a>
+                           </div>`;
+                   }
+                   els.removeFileBtn.classList.remove('hidden');
+                   els.uploadLabel.innerText = 'Change Receipt/File';
+               } else {
+                   els.filePreviewContainer.classList.add('hidden');
+                   els.removeFileBtn.classList.add('hidden');
+                   els.uploadLabel.innerText = 'Upload or Capture Receipt';
+               }
+           },
+
+           removeReceipt: () => {
+               currentReceiptFile = null;
+               currentReceiptUrl = null;
+               currentStoragePath = null; // NEW: Clear storage path
+               els.receiptFile.value = '';
+               els.fileStatus.innerText = 'Receipt removed. Click Save to confirm.';
+               window.app.updateFilePreview(null);
+           },
+           
+           // --- UTILITY ---
+           toggleTypeStyle: () => {
+               const type = document.querySelector('input[name="type"]:checked').value;
+               const color = type === 'income' ? 'emerald' : 'rose';
+               const actionText = currentTransactionId ? 'Save Changes' : `Add ${type.charAt(0).toUpperCase() + type.slice(1)}`;
+               
+               els.submitBtn.className = `w-full bg-${color}-500 hover:bg-${color}-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-${color}-500/20 active:scale-[0.98] transition-all text-lg`;
+               els.submitBtn.innerText = actionText;
+               els.modalTitle.innerText = currentTransactionId ? 'Edit Transaction' : 'New Transaction';
+           },
+
+           // --- SEARCH & SORT (unchanged) ---
+           setSort: (sortType) => { currentSort = sortType; updateUI(); },
+           toggleSearch: () => { els.searchBar.classList.toggle('hidden'); if (!els.searchBar.classList.contains('hidden')) els.searchInput.focus(); },
+           onSearch: (val) => { searchQuery = val; val.length > 0 ? els.searchClearBtn.classList.remove('hidden') : els.searchClearBtn.classList.add('hidden'); updateUI(); },
+           clearSearch: () => { searchQuery = ''; els.searchInput.value = ''; els.searchClearBtn.classList.add('hidden'); updateUI(); els.searchInput.focus(); },
+
+           toggleDetailSearch: () => { els.detailSearchBar.classList.toggle('hidden'); if (!els.detailSearchBar.classList.contains('hidden')) els.detailSearchInput.focus(); },
+           onDetailSearch: (val) => { detailSearchQuery = val; val.length > 0 ? els.detailSearchClearBtn.classList.remove('hidden') : els.detailSearchClearBtn.classList.add('hidden'); window.app.renderDetailList(); },
+           clearDetailSearch: () => { detailSearchQuery = ''; els.detailSearchInput.value = ''; els.detailSearchClearBtn.classList.add('hidden'); window.app.renderDetailList(); els.detailSearchInput.focus(); },
+
+           // --- CATEGORY DETAIL VIEW (minor update to item click) ---
+           openCategoryDetail: (catName) => {
+               window.currentDetailCategory = catName;
+               els.detailTitle.innerText = catName;
+               detailSearchQuery = '';
+               els.detailSearchInput.value = '';
+               els.detailSearchBar.classList.add('hidden');
+               els.detailSearchClearBtn.classList.add('hidden');
+               window.app.renderDetailList();
+               els.detailView.classList.remove('hidden');
+               requestAnimationFrame(() => { els.detailView.classList.add('slide-in-active'); });
+           },
+
+           renderDetailList: () => {
+               if (!window.currentDetailCategory) return;
+               const catName = window.currentDetailCategory;
+               
+               let catTx = transactions.filter(t => (t.category || 'General') === catName);
+
+               if (detailSearchQuery) {
+                   const lowerQ = detailSearchQuery.toLowerCase();
+                   catTx = catTx.filter(t => t.text && t.text.toLowerCase().includes(lowerQ));
+               }
+
+               catTx.sort((a, b) => b.timestamp - a.timestamp);
+               const total = catTx.reduce((acc, t) => acc + t.amount, 0);
+               els.detailBalance.innerText = formatMoney(total);
+               els.detailBalance.className = `text-2xl font-bold ${total < 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+               els.detailList.innerHTML = '';
+               if (catTx.length === 0) {
+                   els.detailList.innerHTML = '<li class="text-center text-slate-500 py-8 text-sm">No matching transactions.</li>';
+               } else {
+                   catTx.forEach(t => {
+                       els.detailList.appendChild(createTransactionItem(t, true)); // Pass true to use detail view click handler
+                   });
+               }
+           },
+
+           closeDetailView: () => {
+               window.currentDetailCategory = null;
+               els.detailView.classList.remove('slide-in-active');
+               setTimeout(() => { els.detailView.classList.add('hidden'); }, 300);
+           },
+
+           // --- EXPORT FUNCTIONALITY (unchanged) ---
+           openExportModal: (context) => {
+               exportContext = context;
+               const today = new Date().toISOString().split('T')[0];
+               els.endDate.value = today;
+               
+               const timestamps = transactions.map(t => t.timestamp).filter(t => t).sort();
+               if (timestamps.length > 0) {
+                   const minDate = new Date(timestamps[0]);
+                   els.startDate.value = minDate.toISOString().split('T')[0];
+               } else {
+                   els.startDate.value = today;
+               }
+
+               let contextMessage = "Exporting all transactions.";
+               let fileName = "zenbudget_all_transactions";
+               if (context === 'detail' && window.currentDetailCategory) {
+                   contextMessage = `Exporting transactions for category: ${window.currentDetailCategory}.`;
+                   fileName = `zenbudget_${window.currentDetailCategory.toLowerCase().replace(/\s/g, '_')}`;
+               }
+               els.exportContextText.innerText = contextMessage;
+               window.currentExportFileName = fileName;
+
+               window.app.openModal('export');
+           },
+
+           handleExport: (e) => {
+               e.preventDefault();
+               const startDateMs = new Date(els.startDate.value + 'T00:00:00').getTime();
+               const endDateMs = new Date(els.endDate.value + 'T23:59:59').getTime();
+
+               let dataToExport = transactions;
+               if (exportContext === 'detail' && window.currentDetailCategory) {
+                   dataToExport = dataToExport.filter(t => (t.category || 'General') === window.currentDetailCategory);
+               }
+
+               dataToExport = dataToExport.filter(t => t.timestamp >= startDateMs && t.timestamp <= endDateMs);
+
+               if (dataToExport.length === 0) {
+                   // Use custom modal for user feedback
+                   const feedbackModal = document.createElement('div');
+                   feedbackModal.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm';
+                   feedbackModal.innerHTML = `
+                       <div class="bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm mx-4">
+                           <h3 class="text-lg font-bold text-white mb-2">Export Failed</h3>
+                           <p class="text-sm text-slate-400 mb-6">No transactions found in the selected date range.</p>
+                           <div class="flex justify-end">
+                               <button id="closeFeedbackBtn" class="px-4 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors">Close</button>
+                           </div>
+                       </div>
+                   `;
+                   document.body.appendChild(feedbackModal);
+                   document.getElementById('closeFeedbackBtn').onclick = () => document.body.removeChild(feedbackModal);
+                   return;
+               }
+
+               const csv = generateCSV(dataToExport);
+               downloadCSV(csv, window.currentExportFileName);
+               window.app.closeModal('export');
+           }
+       };
+
+       function generateCSV(data) {
+           const header = ['Date', 'Type', 'Category', 'Description', 'Amount', 'Receipt URL', 'Storage Path'];
+           const rows = data.map(t => [
+               new Date(t.timestamp).toLocaleDateString(),
+               t.type.charAt(0).toUpperCase() + t.type.slice(1),
+               t.category || 'General',
+               t.text || '',
+               formatMoney(t.amount, true), // Pass true to formatMoney to skip '₹' symbol
+               t.receiptUrl || '',
+               t.storagePath || '' // Include storage path in export for completeness
+           ]);
+
+           let csvContent = header.join(',') + '\n';
+           rows.forEach(row => {
+               const escapedRow = row.map(field => {
+                   if (typeof field === 'string' && (field.includes(',') || field.includes('"') || field.includes('\n'))) {
+                       return `"${field.replace(/"/g, '""')}"`;
+                   }
+                   return field;
+               });
+               csvContent += escapedRow.join(',') + '\n';
+           });
+           return csvContent;
+       }
+
+       function downloadCSV(csvContent, filename) {
+           const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+           const link = document.createElement('a');
+           link.href = URL.createObjectURL(blob);
+           link.download = `${filename}_${els.startDate.value}_to_${els.endDate.value}.csv`;
+           document.body.appendChild(link);
+           link.click();
+           document.body.removeChild(link);
+       }
+       
+       // CHANGED: Format money to use the Indian Rupee symbol (₹)
+       function formatMoney(num, raw = false) {
+           const formatted = Math.abs(num).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+           return raw ? formatted : '₹' + formatted;
+       }
+
+       function setStatus(msg, colorClass) { els.status.innerHTML = `<div class="w-2 h-2 rounded-full ${colorClass.replace('text-', 'bg-')} mr-2"></div><span class="${colorClass} text-[10px] uppercase font-bold tracking-wider">${msg}</span>`; }
+
+       function createTransactionItem(t, isDetailView = false) {
+           const sign = t.amount < 0 ? '-' : '+';
+           const itemClass = t.amount < 0 ? 'text-rose-400' : 'text-emerald-400';
+           const iconClass = t.amount < 0 ? 'fa-arrow-trend-down text-rose-500' : 'fa-arrow-trend-up text-emerald-500';
+           const bgClass = t.amount < 0 ? 'bg-rose-500/10' : 'bg-emerald-500/10';
+           const cat = t.category || 'General';
+           const desc = t.text ? t.text : '';
+
+           const item = document.createElement('li');
+           item.className = 'glass p-4 rounded-xl flex justify-between items-center group cursor-pointer active:scale-[0.99] transition-transform';
+           
+           // Edit functionality is triggered by clicking the item
+           item.onclick = () => window.app.openModal('add', t);
+           
+           item.innerHTML = `
+               <div class="flex items-center gap-4 overflow-hidden">
+                   <div class="w-10 h-10 rounded-full ${bgClass} flex items-center justify-center flex-shrink-0">
+                       <i class="fa-solid ${iconClass} text-sm"></i>
+                   </div>
+                   <div class="flex flex-col min-w-0">
+                       <p class="text-white font-medium text-sm truncate flex items-center gap-2">
+                           ${cat}
+                           ${t.receiptUrl ? '<i class="fa-solid fa-file-invoice text-indigo-400 text-xs" title="Receipt Attached"></i>' : ''}
+                       </p>
+                       <div class="flex items-center gap-2 text-xs text-slate-500">
+                           <span>${new Date(t.timestamp).toLocaleDateString()}</span>
+                           ${desc ? `<span class="w-1 h-1 rounded-full bg-slate-600 flex-shrink-0"></span><span class="truncate">${desc}</span>` : ''}
+                       </div>
+                   </div>
+               </div>
+               <div class="flex items-center gap-3 flex-shrink-0 ml-2">
+                   <span class="font-bold ${itemClass}">${sign}${formatMoney(Math.abs(t.amount))}</span>
+                   <!-- Hide delete button in main view to encourage editing, or only show on detail view if space is tight -->
+                   ${isDetailView ? `
+                   <button onclick="event.stopPropagation(); window.app.removeTransaction('${t.id}')" class="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 hover:bg-red-500 hover:text-white transition-colors">
+                       <i class="fa-solid fa-trash text-xs"></i>
+                   </button>
+                   ` : ''}
+               </div>
+           `;
+           return item;
+       }
+
+       function updateSortButtons(mode) {
+            if (mode === 'date') {
+               els.sortDateBtn.className = "px-3 py-1 rounded-md transition-colors text-white bg-slate-600 shadow-sm";
+               els.sortCatBtn.className = "px-3 py-1 rounded-md transition-colors text-slate-400 hover:text-white";
+           } else {
+               els.sortDateBtn.className = "px-3 py-1 rounded-md transition-colors text-slate-400 hover:text-white";
+               els.sortCatBtn.className = "px-3 py-1 rounded-md transition-colors text-white bg-slate-600 shadow-sm";
+           }
+       }
+
+       function updateUI() {
+           const amounts = transactions.map(t => t.amount);
+           const total = amounts.reduce((a, b) => a + b, 0);
+           const income = amounts.filter(i => i > 0).reduce((a, b) => a + b, 0);
+           const expense = (amounts.filter(i => i < 0).reduce((a, b) => a + b, 0) * -1);
+
+           els.balance.innerText = formatMoney(total);
+           els.income.innerText = `+${formatMoney(income)}`;
+           els.expense.innerText = `-${formatMoney(expense)}`;
+
+           els.list.innerHTML = '';
+
+           const displayData = filterTransactions();
+
+           if (displayData.length === 0) {
+               els.emptyState.classList.remove('hidden');
+               els.emptyState.classList.add('flex');
+               if(searchQuery) els.emptyState.querySelector('p').innerText = "No matches found.";
+               else els.emptyState.querySelector('p').innerText = "No transactions found. Add your first transaction!";
+               return;
+           }
+           els.emptyState.classList.add('hidden');
+           els.emptyState.classList.remove('flex');
+
+           if (currentSort === 'date') {
+               updateSortButtons('date');
+               const sorted = [...displayData].sort((a, b) => b.timestamp - a.timestamp);
+               sorted.forEach(t => els.list.appendChild(createTransactionItem(t)));
+           } else {
+               updateSortButtons('category');
+               const groups = {};
+               displayData.forEach(t => {
+                   const cat = t.category || 'General';
+                   if (!groups[cat]) groups[cat] = 0;
+                   groups[cat] += t.amount;
+               });
+
+               Object.keys(groups).sort().forEach(cat => {
+                   const net = groups[cat];
+                   const sign = net < 0 ? '-' : '+';
+                   const colorClass = net < 0 ? 'text-rose-400' : 'text-emerald-400';
+                   const isZero = net === 0;
+
+                   const li = document.createElement('li');
+                   li.className = 'glass p-4 rounded-xl flex justify-between items-center cursor-pointer hover:bg-slate-800/50 active:scale-[0.98] transition-all';
+                   li.onclick = () => window.app.openCategoryDetail(cat);
+
+                   li.innerHTML = `
+                       <div class="flex items-center gap-4">
+                           <div class="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center">
+                               <i class="fa-solid fa-layer-group text-indigo-400 text-sm"></i>
+                           </div>
+                           <span class="text-white font-bold text-sm">${cat}</span>
+                       </div>
+                       <div class="flex items-center gap-3">
+                           <span class="font-bold ${colorClass}">${isZero ? '' : sign}${formatMoney(Math.abs(net))}</span>
+                           <i class="fa-solid fa-chevron-right text-slate-600 text-xs"></i>
+                       </div>
+                   `;
+                   els.list.appendChild(li);
+               });
+           }
+       }
+
+       initAuth();
+   </script>
+</body>
+</html>
